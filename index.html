@@ -1,0 +1,1867 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AnatomiQuiz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            boxShadow: {
+              glow: "0 0 0 1px rgba(96, 165, 250, 0.35), 0 18px 40px rgba(15, 23, 42, 0.35)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        font-family: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(37, 99, 235, 0.22), transparent 48%),
+          linear-gradient(135deg, #020617, #0f172a 45%, #1e293b);
+      }
+
+      .surface {
+        backdrop-filter: blur(10px);
+        background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.85));
+      }
+
+      .anatomy-frame {
+        aspect-ratio: 2 / 3;
+      }
+
+      .hitbox-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        pointer-events: all;
+      }
+
+      .hitbox-capture {
+        fill: rgba(0, 0, 0, 0);
+        pointer-events: all;
+      }
+
+      .hitbox-svg.is-locked .quiz-region {
+        pointer-events: none;
+      }
+
+      .quiz-region {
+        fill: rgba(59, 130, 246, 0);
+        stroke: rgba(96, 165, 250, 0);
+        stroke-width: 0.45;
+        cursor: pointer;
+        transition: fill 180ms ease, stroke 180ms ease;
+      }
+
+      .quiz-region:hover {
+        fill: rgba(96, 165, 250, 0.24);
+        stroke: rgba(147, 197, 253, 0.95);
+      }
+
+      .quiz-region.is-correct {
+        fill: rgba(34, 197, 94, 0.48);
+        stroke: rgba(187, 247, 208, 1);
+      }
+
+      .quiz-region.is-wrong {
+        fill: rgba(239, 68, 68, 0.48);
+        stroke: rgba(254, 202, 202, 1);
+      }
+
+      .quiz-region.is-reveal {
+        fill: rgba(250, 204, 21, 0.6);
+        stroke: rgba(255, 249, 196, 1);
+        animation: reveal-pulse 0.55s ease-in-out infinite alternate;
+      }
+
+      .quiz-region.is-calibration {
+        fill: rgba(251, 191, 36, 0.24);
+        stroke: rgba(251, 191, 36, 1);
+        stroke-dasharray: 1.6 1;
+      }
+
+      .quiz-region.is-calibration-selected {
+        fill: rgba(14, 165, 233, 0.3);
+        stroke: rgba(125, 211, 252, 1);
+        stroke-width: 0.7;
+      }
+
+      .quiz-region.is-preview {
+        fill: rgba(56, 189, 248, 0.2);
+        stroke: rgba(125, 211, 252, 0.95);
+        stroke-dasharray: 1.2 0.9;
+        pointer-events: none;
+      }
+
+      @keyframes reveal-pulse {
+        from {
+          fill-opacity: 0.24;
+          stroke-opacity: 0.6;
+        }
+        to {
+          fill-opacity: 0.78;
+          stroke-opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-100 antialiased">
+    <main id="app" class="mx-auto min-h-screen max-w-7xl p-4 sm:p-6 lg:p-8"></main>
+
+    <script>
+      (async () => {
+        const app = document.getElementById("app");
+
+        const PARTS = [
+          { id: "skallben", label: "Skallben", mode: "skeleton" },
+          { id: "ryggrad", label: "Ryggrad", mode: "skeleton" },
+          { id: "skulderblad", label: "Skulderblad", mode: "skeleton" },
+          { id: "overarmsben", label: "Överarmsben", mode: "skeleton" },
+          { id: "stralben", label: "Strålben", mode: "skeleton" },
+          { id: "armbagsben", label: "Armbågsben", mode: "skeleton" },
+          { id: "nyckelben", label: "Nyckelben", mode: "skeleton" },
+          { id: "revben", label: "Revben", mode: "skeleton" },
+          { id: "brostben", label: "Bröstben", mode: "skeleton" },
+          { id: "hoftben", label: "Höftben", mode: "skeleton" },
+          { id: "larben", label: "Lårben", mode: "skeleton" },
+          { id: "skenben", label: "Skenben", mode: "skeleton" },
+          { id: "vadben", label: "Vadben", mode: "skeleton" },
+          { id: "sittben", label: "Sittben", mode: "skeleton" },
+          { id: "lats", label: "Lats", mode: "muscle" },
+          { id: "kappmuskeln", label: "Kappmuskeln", mode: "muscle" },
+          { id: "deltamuskeln", label: "Deltamuskeln", mode: "muscle" },
+          { id: "biceps", label: "Biceps", mode: "muscle" },
+          { id: "triceps", label: "Triceps", mode: "muscle" },
+          { id: "underarmsmuskeln", label: "Underarmsmuskeln", mode: "muscle" },
+          { id: "brostmuskeln", label: "Bröstmuskeln", mode: "muscle" },
+          { id: "sneda_bukmuskeln", label: "Sneda bukmuskeln", mode: "muscle" },
+          { id: "raka_bukmuskeln", label: "Raka bukmuskeln", mode: "muscle" },
+          { id: "satesmuskeln", label: "Sätesmuskeln", mode: "muscle" },
+          { id: "fyrhovdade_larmuskeln", label: "Fyrhövdade lårmuskeln", mode: "muscle" },
+          { id: "hamstrings", label: "Hamstrings", mode: "muscle" },
+          { id: "vadmuskeln", label: "Vadmuskeln", mode: "muscle" },
+        ];
+
+        const REGIONS = [
+          // Skeleton - front
+          { id: "sk-front-skallben", mode: "skeleton", partId: "skallben", view: "front", shape: "ellipse", coords: [50, 10.6, 5.8, 5.8] },
+          { id: "sk-front-ryggrad", mode: "skeleton", partId: "ryggrad", view: "front", shape: "rect", coords: [48.9, 19.5, 2.2, 35.2] },
+          { id: "sk-front-nyckelben-l", mode: "skeleton", partId: "nyckelben", view: "front", shape: "rect", coords: [43.4, 21.8, 5.3, 1.5] },
+          { id: "sk-front-nyckelben-r", mode: "skeleton", partId: "nyckelben", view: "front", shape: "rect", coords: [51.3, 21.8, 5.3, 1.5] },
+          { id: "sk-front-brostben", mode: "skeleton", partId: "brostben", view: "front", shape: "rect", coords: [49.1, 23.2, 1.8, 12] },
+          { id: "sk-front-revben-l", mode: "skeleton", partId: "revben", view: "front", shape: "ellipse", coords: [43.9, 31.7, 7.3, 7.2] },
+          { id: "sk-front-revben-r", mode: "skeleton", partId: "revben", view: "front", shape: "ellipse", coords: [56.1, 31.7, 7.3, 7.2] },
+          { id: "sk-front-overarmsben-l", mode: "skeleton", partId: "overarmsben", view: "front", shape: "rect", coords: [32.3, 28.4, 2.8, 16.2] },
+          { id: "sk-front-overarmsben-r", mode: "skeleton", partId: "overarmsben", view: "front", shape: "rect", coords: [64.9, 28.4, 2.8, 16.2] },
+          { id: "sk-front-stralben-l", mode: "skeleton", partId: "stralben", view: "front", shape: "rect", coords: [26.5, 44.2, 2.1, 15.4] },
+          { id: "sk-front-stralben-r", mode: "skeleton", partId: "stralben", view: "front", shape: "rect", coords: [71.4, 44.2, 2.1, 15.4] },
+          { id: "sk-front-armbagsben-l", mode: "skeleton", partId: "armbagsben", view: "front", shape: "rect", coords: [29.2, 44.2, 2.1, 15.4] },
+          { id: "sk-front-armbagsben-r", mode: "skeleton", partId: "armbagsben", view: "front", shape: "rect", coords: [68.7, 44.2, 2.1, 15.4] },
+          { id: "sk-front-hoftben-l", mode: "skeleton", partId: "hoftben", view: "front", shape: "ellipse", coords: [44.1, 54.3, 5.4, 4.2] },
+          { id: "sk-front-hoftben-r", mode: "skeleton", partId: "hoftben", view: "front", shape: "ellipse", coords: [55.9, 54.3, 5.4, 4.2] },
+          { id: "sk-front-larben-l", mode: "skeleton", partId: "larben", view: "front", shape: "rect", coords: [45.3, 58.7, 3.1, 20.5] },
+          { id: "sk-front-larben-r", mode: "skeleton", partId: "larben", view: "front", shape: "rect", coords: [51.6, 58.7, 3.1, 20.5] },
+          { id: "sk-front-skenben-l", mode: "skeleton", partId: "skenben", view: "front", shape: "rect", coords: [45.4, 79.8, 2.5, 15.9] },
+          { id: "sk-front-skenben-r", mode: "skeleton", partId: "skenben", view: "front", shape: "rect", coords: [52.1, 79.8, 2.5, 15.9] },
+          { id: "sk-front-vadben-l", mode: "skeleton", partId: "vadben", view: "front", shape: "rect", coords: [42.7, 79.7, 2.0, 16.2] },
+          { id: "sk-front-vadben-r", mode: "skeleton", partId: "vadben", view: "front", shape: "rect", coords: [55.3, 79.7, 2.0, 16.2] },
+
+          // Skeleton - back
+          { id: "sk-back-skallben", mode: "skeleton", partId: "skallben", view: "back", shape: "ellipse", coords: [50, 10.3, 5.8, 5.7] },
+          { id: "sk-back-ryggrad", mode: "skeleton", partId: "ryggrad", view: "back", shape: "rect", coords: [49.0, 18.5, 2.0, 38.4] },
+          { id: "sk-back-skulderblad-l", mode: "skeleton", partId: "skulderblad", view: "back", shape: "polygon", coords: [39.9, 26.3, 45.3, 28, 44.5, 38, 37.3, 36.6] },
+          { id: "sk-back-skulderblad-r", mode: "skeleton", partId: "skulderblad", view: "back", shape: "polygon", coords: [60.1, 26.3, 54.7, 28, 55.5, 38, 62.7, 36.6] },
+          { id: "sk-back-overarmsben-l", mode: "skeleton", partId: "overarmsben", view: "back", shape: "rect", coords: [32.6, 28.6, 2.8, 15.8] },
+          { id: "sk-back-overarmsben-r", mode: "skeleton", partId: "overarmsben", view: "back", shape: "rect", coords: [64.6, 28.6, 2.8, 15.8] },
+          { id: "sk-back-stralben-l", mode: "skeleton", partId: "stralben", view: "back", shape: "rect", coords: [26.3, 44.4, 2.1, 15.4] },
+          { id: "sk-back-stralben-r", mode: "skeleton", partId: "stralben", view: "back", shape: "rect", coords: [71.6, 44.4, 2.1, 15.4] },
+          { id: "sk-back-armbagsben-l", mode: "skeleton", partId: "armbagsben", view: "back", shape: "rect", coords: [29.0, 44.4, 2.1, 15.4] },
+          { id: "sk-back-armbagsben-r", mode: "skeleton", partId: "armbagsben", view: "back", shape: "rect", coords: [68.9, 44.4, 2.1, 15.4] },
+          { id: "sk-back-revben-l", mode: "skeleton", partId: "revben", view: "back", shape: "ellipse", coords: [43.8, 33.1, 7.2, 7.0] },
+          { id: "sk-back-revben-r", mode: "skeleton", partId: "revben", view: "back", shape: "ellipse", coords: [56.2, 33.1, 7.2, 7.0] },
+          { id: "sk-back-hoftben-l", mode: "skeleton", partId: "hoftben", view: "back", shape: "ellipse", coords: [44.2, 54.6, 5.2, 4.0] },
+          { id: "sk-back-hoftben-r", mode: "skeleton", partId: "hoftben", view: "back", shape: "ellipse", coords: [55.8, 54.6, 5.2, 4.0] },
+          { id: "sk-back-sittben-l", mode: "skeleton", partId: "sittben", view: "back", shape: "ellipse", coords: [47.1, 58.6, 2.2, 2.1] },
+          { id: "sk-back-sittben-r", mode: "skeleton", partId: "sittben", view: "back", shape: "ellipse", coords: [52.9, 58.6, 2.2, 2.1] },
+          { id: "sk-back-larben-l", mode: "skeleton", partId: "larben", view: "back", shape: "rect", coords: [45.1, 60.2, 3.0, 19.2] },
+          { id: "sk-back-larben-r", mode: "skeleton", partId: "larben", view: "back", shape: "rect", coords: [51.9, 60.2, 3.0, 19.2] },
+          { id: "sk-back-skenben-l", mode: "skeleton", partId: "skenben", view: "back", shape: "rect", coords: [45.4, 79.8, 2.4, 16.0] },
+          { id: "sk-back-skenben-r", mode: "skeleton", partId: "skenben", view: "back", shape: "rect", coords: [52.2, 79.8, 2.4, 16.0] },
+          { id: "sk-back-vadben-l", mode: "skeleton", partId: "vadben", view: "back", shape: "rect", coords: [42.9, 79.8, 2.0, 16.0] },
+          { id: "sk-back-vadben-r", mode: "skeleton", partId: "vadben", view: "back", shape: "rect", coords: [55.1, 79.8, 2.0, 16.0] },
+
+          // Muscles - front
+          { id: "mu-front-deltamuskeln-l", mode: "muscle", partId: "deltamuskeln", view: "front", shape: "ellipse", coords: [36.0, 30.5, 4.3, 4.0] },
+          { id: "mu-front-deltamuskeln-r", mode: "muscle", partId: "deltamuskeln", view: "front", shape: "ellipse", coords: [64.0, 30.5, 4.3, 4.0] },
+          { id: "mu-front-biceps-l", mode: "muscle", partId: "biceps", view: "front", shape: "ellipse", coords: [33.4, 39.8, 3.6, 5.2] },
+          { id: "mu-front-biceps-r", mode: "muscle", partId: "biceps", view: "front", shape: "ellipse", coords: [66.6, 39.8, 3.6, 5.2] },
+          { id: "mu-front-underarm-l", mode: "muscle", partId: "underarmsmuskeln", view: "front", shape: "ellipse", coords: [27.4, 50.1, 3.5, 7.6] },
+          { id: "mu-front-underarm-r", mode: "muscle", partId: "underarmsmuskeln", view: "front", shape: "ellipse", coords: [72.6, 50.1, 3.5, 7.6] },
+          { id: "mu-front-brost-l", mode: "muscle", partId: "brostmuskeln", view: "front", shape: "ellipse", coords: [44.0, 34.2, 6.0, 4.7] },
+          { id: "mu-front-brost-r", mode: "muscle", partId: "brostmuskeln", view: "front", shape: "ellipse", coords: [56.0, 34.2, 6.0, 4.7] },
+          { id: "mu-front-sneda-l", mode: "muscle", partId: "sneda_bukmuskeln", view: "front", shape: "ellipse", coords: [40.8, 46.2, 3.9, 6.3] },
+          { id: "mu-front-sneda-r", mode: "muscle", partId: "sneda_bukmuskeln", view: "front", shape: "ellipse", coords: [59.2, 46.2, 3.9, 6.3] },
+          { id: "mu-front-raka-buk", mode: "muscle", partId: "raka_bukmuskeln", view: "front", shape: "rect", coords: [46.6, 38.4, 6.8, 16.0] },
+          { id: "mu-front-fyrhovdade-l", mode: "muscle", partId: "fyrhovdade_larmuskeln", view: "front", shape: "ellipse", coords: [45.5, 69.8, 4.5, 10.2] },
+          { id: "mu-front-fyrhovdade-r", mode: "muscle", partId: "fyrhovdade_larmuskeln", view: "front", shape: "ellipse", coords: [54.5, 69.8, 4.5, 10.2] },
+          { id: "mu-front-vad-l", mode: "muscle", partId: "vadmuskeln", view: "front", shape: "ellipse", coords: [46.2, 88.1, 2.8, 6.0] },
+          { id: "mu-front-vad-r", mode: "muscle", partId: "vadmuskeln", view: "front", shape: "ellipse", coords: [53.8, 88.1, 2.8, 6.0] },
+
+          // Muscles - back
+          { id: "mu-back-kapp", mode: "muscle", partId: "kappmuskeln", view: "back", shape: "polygon", coords: [43.4, 17.2, 56.6, 17.2, 60.2, 30.2, 39.8, 30.2] },
+          { id: "mu-back-lats-l", mode: "muscle", partId: "lats", view: "back", shape: "ellipse", coords: [42.2, 40.6, 5.8, 8.5] },
+          { id: "mu-back-lats-r", mode: "muscle", partId: "lats", view: "back", shape: "ellipse", coords: [57.8, 40.6, 5.8, 8.5] },
+          { id: "mu-back-delta-l", mode: "muscle", partId: "deltamuskeln", view: "back", shape: "ellipse", coords: [35.7, 31.4, 4.3, 4.1] },
+          { id: "mu-back-delta-r", mode: "muscle", partId: "deltamuskeln", view: "back", shape: "ellipse", coords: [64.3, 31.4, 4.3, 4.1] },
+          { id: "mu-back-triceps-l", mode: "muscle", partId: "triceps", view: "back", shape: "ellipse", coords: [33.0, 40.3, 3.6, 5.1] },
+          { id: "mu-back-triceps-r", mode: "muscle", partId: "triceps", view: "back", shape: "ellipse", coords: [67.0, 40.3, 3.6, 5.1] },
+          { id: "mu-back-underarm-l", mode: "muscle", partId: "underarmsmuskeln", view: "back", shape: "ellipse", coords: [27.1, 50.4, 3.5, 7.5] },
+          { id: "mu-back-underarm-r", mode: "muscle", partId: "underarmsmuskeln", view: "back", shape: "ellipse", coords: [72.9, 50.4, 3.5, 7.5] },
+          { id: "mu-back-sate-l", mode: "muscle", partId: "satesmuskeln", view: "back", shape: "ellipse", coords: [45.5, 59.7, 5.2, 5.1] },
+          { id: "mu-back-sate-r", mode: "muscle", partId: "satesmuskeln", view: "back", shape: "ellipse", coords: [54.5, 59.7, 5.2, 5.1] },
+          { id: "mu-back-ham-l", mode: "muscle", partId: "hamstrings", view: "back", shape: "ellipse", coords: [45.6, 71.7, 4.5, 9.6] },
+          { id: "mu-back-ham-r", mode: "muscle", partId: "hamstrings", view: "back", shape: "ellipse", coords: [54.4, 71.7, 4.5, 9.6] },
+          { id: "mu-back-vad-l", mode: "muscle", partId: "vadmuskeln", view: "back", shape: "ellipse", coords: [46.2, 88.3, 3.1, 6.2] },
+          { id: "mu-back-vad-r", mode: "muscle", partId: "vadmuskeln", view: "back", shape: "ellipse", coords: [53.8, 88.3, 3.1, 6.2] },
+        ];
+
+        const IMAGE_PATHS = {
+          muscle: {
+            front: "assets/muscles-front.png",
+            back: "assets/muscles-back.png",
+          },
+          skeleton: {
+            front: "assets/skeleton-front.png",
+            back: "assets/skeleton-back.png",
+          },
+        };
+
+        const CALIBRATION_STORAGE_KEY = "anatomiquiz.customRegions.v1";
+        const BUNDLED_CALIBRATION_REGIONS_PATH = "data/muscles.json";
+
+        const partsByMode = PARTS.reduce(
+          (acc, part) => {
+            acc[part.mode].push(part);
+            return acc;
+          },
+          { skeleton: [], muscle: [] }
+        );
+
+        const partById = new Map(PARTS.map((part) => [part.id, part]));
+        const regionById = new Map(REGIONS.map((region) => [region.id, region]));
+        const regionsByPartId = new Map();
+        const regionsByModeView = new Map();
+        let bundledCalibrationRegions = [];
+
+        function isValidShape(shape) {
+          return shape === "rect" || shape === "ellipse" || shape === "polygon";
+        }
+
+        function isValidMode(mode) {
+          return mode === "muscle" || mode === "skeleton";
+        }
+
+        function isValidView(view) {
+          return view === "front" || view === "back";
+        }
+
+        function sanitizeImportedRegions(rawRegions) {
+          if (!Array.isArray(rawRegions)) return [];
+          const sanitized = [];
+
+          for (const raw of rawRegions) {
+            if (!raw || typeof raw !== "object") continue;
+            if (!isValidMode(raw.mode) || !isValidView(raw.view) || !isValidShape(raw.shape)) continue;
+            if (!partById.has(raw.partId)) continue;
+            if (partById.get(raw.partId).mode !== raw.mode) continue;
+            if (!Array.isArray(raw.coords) || raw.coords.length === 0) continue;
+
+            const coords = raw.coords.map(Number).filter(Number.isFinite);
+            if (coords.length !== raw.coords.length) continue;
+
+            if (raw.shape === "rect" || raw.shape === "ellipse") {
+              if (coords.length !== 4) continue;
+            } else if (raw.shape === "polygon") {
+              if (coords.length < 6 || coords.length % 2 !== 0) continue;
+            }
+
+            sanitized.push({
+              id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : `cal-${sanitized.length + 1}`,
+              mode: raw.mode,
+              partId: raw.partId,
+              view: raw.view,
+              shape: raw.shape,
+              coords,
+            });
+          }
+
+          return sanitized;
+        }
+
+        function computeNextCalibrationId(regions) {
+          let maxId = 0;
+          for (const region of regions) {
+            const match = /^cal-(\d+)$/.exec(region.id);
+            if (!match) continue;
+            const value = Number(match[1]);
+            if (Number.isFinite(value)) maxId = Math.max(maxId, value);
+          }
+          return maxId + 1;
+        }
+
+        function loadStoredCalibrationRegions() {
+          try {
+            const raw = window.localStorage.getItem(CALIBRATION_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return sanitizeImportedRegions(parsed);
+          } catch {
+            return [];
+          }
+        }
+
+        function saveStoredCalibrationRegions(regions) {
+          try {
+            window.localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(regions));
+          } catch {
+            // Ignore quota/private mode errors.
+          }
+        }
+
+        async function loadBundledCalibrationRegions() {
+          try {
+            const response = await fetch(BUNDLED_CALIBRATION_REGIONS_PATH);
+            if (!response.ok) return [];
+            const parsed = await response.json();
+            return sanitizeImportedRegions(parsed);
+          } catch {
+            return [];
+          }
+        }
+
+        function removeConsecutiveDuplicateCoords(coords) {
+          if (!Array.isArray(coords) || coords.length < 4) return coords;
+          const cleaned = [];
+          for (let i = 0; i < coords.length; i += 2) {
+            const x = Number(coords[i]);
+            const y = Number(coords[i + 1]);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+            const prevX = cleaned[cleaned.length - 2];
+            const prevY = cleaned[cleaned.length - 1];
+            if (cleaned.length >= 2 && prevX === x && prevY === y) continue;
+            cleaned.push(x, y);
+          }
+          if (cleaned.length >= 4) {
+            const firstX = cleaned[0];
+            const firstY = cleaned[1];
+            const lastX = cleaned[cleaned.length - 2];
+            const lastY = cleaned[cleaned.length - 1];
+            if (firstX === lastX && firstY === lastY) {
+              cleaned.pop();
+              cleaned.pop();
+            }
+          }
+          return cleaned;
+        }
+
+        function simplifyPolyline(points, epsilon) {
+          if (!Array.isArray(points) || points.length <= 2) return points;
+          const sqEpsilon = epsilon * epsilon;
+
+          function sqSegmentDistance(point, start, end) {
+            let x = start.x;
+            let y = start.y;
+            let dx = end.x - x;
+            let dy = end.y - y;
+            if (dx !== 0 || dy !== 0) {
+              const t = ((point.x - x) * dx + (point.y - y) * dy) / (dx * dx + dy * dy);
+              if (t > 1) {
+                x = end.x;
+                y = end.y;
+              } else if (t > 0) {
+                x += dx * t;
+                y += dy * t;
+              }
+            }
+            dx = point.x - x;
+            dy = point.y - y;
+            return dx * dx + dy * dy;
+          }
+
+          function simplifyDPStep(pts, first, last, simplified) {
+            let maxDist = sqEpsilon;
+            let index = -1;
+            for (let i = first + 1; i < last; i += 1) {
+              const dist = sqSegmentDistance(pts[i], pts[first], pts[last]);
+              if (dist > maxDist) {
+                index = i;
+                maxDist = dist;
+              }
+            }
+            if (index > -1) {
+              if (index - first > 1) simplifyDPStep(pts, first, index, simplified);
+              simplified.push(pts[index]);
+              if (last - index > 1) simplifyDPStep(pts, index, last, simplified);
+            }
+          }
+
+          const last = points.length - 1;
+          const simplified = [points[0]];
+          simplifyDPStep(points, 0, last, simplified);
+          simplified.push(points[last]);
+          return simplified;
+        }
+
+        function optimizePolygonCoordsForShare(coords) {
+          const cleaned = removeConsecutiveDuplicateCoords(coords);
+          if (!Array.isArray(cleaned) || cleaned.length < 6) return coords;
+          const points = [];
+          for (let i = 0; i < cleaned.length; i += 2) {
+            points.push({
+              x: Number(cleaned[i].toFixed(2)),
+              y: Number(cleaned[i + 1].toFixed(2)),
+            });
+          }
+          if (points.length < 3) return coords;
+          const closed = [...points, points[0]];
+          const simplifiedClosed = simplifyPolyline(closed, 0.22);
+          let simplified = simplifiedClosed.slice(0, -1);
+          if (simplified.length < 3) simplified = points;
+          const out = [];
+          for (const point of simplified) {
+            out.push(point.x, point.y);
+          }
+          return out.length >= 6 ? out : coords;
+        }
+
+        function compactRegionForShare(region) {
+          const coords = region.shape === "polygon"
+            ? optimizePolygonCoordsForShare(region.coords)
+            : region.coords.map((value) => Number(Number(value).toFixed(2)));
+          return [region.id, region.mode, region.partId, region.view, region.shape, coords];
+        }
+
+        function expandCompactRegion(raw) {
+          if (!Array.isArray(raw) || raw.length < 6) return raw;
+          return {
+            id: raw[0],
+            mode: raw[1],
+            partId: raw[2],
+            view: raw[3],
+            shape: raw[4],
+            coords: raw[5],
+          };
+        }
+
+        function encodeBase64Url(text) {
+          const bytes = new TextEncoder().encode(text);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+          return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+        }
+
+        function decodeBase64Url(input) {
+          const padded = input.replace(/-/g, "+").replace(/_/g, "/")
+            + "=".repeat((4 - (input.length % 4)) % 4);
+          const binary = atob(padded);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+          return new TextDecoder().decode(bytes);
+        }
+
+        function encodeRegionsForUrl(regions) {
+          try {
+            const compact = regions.map(compactRegionForShare);
+            const json = JSON.stringify(compact);
+            return encodeBase64Url(json);
+          } catch {
+            return null;
+          }
+        }
+
+        function decodeRegionsFromUrl(encoded) {
+          try {
+            const json = decodeBase64Url(encoded);
+            const parsed = JSON.parse(json);
+            const expanded = Array.isArray(parsed) ? parsed.map(expandCompactRegion) : parsed;
+            return sanitizeImportedRegions(expanded);
+          } catch {
+            return [];
+          }
+        }
+
+        function loadInitialCalibrationRegions() {
+          const stored = loadStoredCalibrationRegions();
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const encoded = params.get("regions");
+            if (!encoded) {
+              if (stored.length > 0) return stored;
+              return bundledCalibrationRegions;
+            }
+            const fromUrl = decodeRegionsFromUrl(encoded);
+            if (fromUrl.length > 0) {
+              saveStoredCalibrationRegions(fromUrl);
+              return fromUrl;
+            }
+            if (stored.length > 0) return stored;
+            return bundledCalibrationRegions;
+          } catch {
+            if (stored.length > 0) return stored;
+            return bundledCalibrationRegions;
+          }
+        }
+
+        function applyImportedRegions(rawRegions) {
+          const imported = sanitizeImportedRegions(rawRegions);
+          const nextId = computeNextCalibrationId(imported);
+          state.calibration = {
+            ...state.calibration,
+            regions: imported,
+            nextId,
+            selectedRegionId: null,
+            replaceAppliedKeys: {},
+            status: imported.length > 0 ? `Importerade ${imported.length} markeringar.` : "Ingen giltig markering hittades i JSON.",
+          };
+          saveStoredCalibrationRegions(imported);
+          render();
+          return imported.length;
+        }
+
+        for (const region of REGIONS) {
+          if (!regionsByPartId.has(region.partId)) {
+            regionsByPartId.set(region.partId, []);
+          }
+          regionsByPartId.get(region.partId).push(region);
+
+          const key = `${region.mode}-${region.view}`;
+          if (!regionsByModeView.has(key)) {
+            regionsByModeView.set(key, []);
+          }
+          regionsByModeView.get(key).push(region);
+        }
+
+        const createInitialState = () => {
+          const storedCalibrationRegions = loadInitialCalibrationRegions();
+          return ({
+          view: "menu",
+          mode: null,
+          questions: [],
+          currentIndex: 0,
+          score: 0,
+          mistakes: 0,
+          locked: false,
+          feedback: {
+            type: "none",
+            regionIds: [],
+          },
+          imageErrors: {},
+          calibration: {
+            enabled: false,
+            selectedPartId: null,
+            selectedRegionId: null,
+            shape: "ellipse",
+            sizeX: 8,
+            sizeY: 8,
+            onlyCustom: false,
+            regions: storedCalibrationRegions,
+            nextId: computeNextCalibrationId(storedCalibrationRegions),
+            preview: null,
+            dragging: null,
+            drawing: null,
+            replaceAppliedKeys: {},
+            suppressClick: false,
+            status: "",
+          },
+        });
+        };
+
+        let state = createInitialState();
+
+        async function initializeBundledRegions() {
+          bundledCalibrationRegions = await loadBundledCalibrationRegions();
+          if (state.calibration.regions.length > 0 || bundledCalibrationRegions.length === 0) return;
+          state.calibration = {
+            ...state.calibration,
+            regions: bundledCalibrationRegions,
+            nextId: computeNextCalibrationId(bundledCalibrationRegions),
+          };
+          saveStoredCalibrationRegions(bundledCalibrationRegions);
+        }
+
+        function modeLabel(mode) {
+          return mode === "skeleton" ? "Skelett" : "Muskler";
+        }
+
+        function shuffle(array) {
+          const copy = [...array];
+          for (let i = copy.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+          }
+          return copy;
+        }
+
+        function pointsForMistakes(mistakes) {
+          if (mistakes <= 0) return 3;
+          if (mistakes === 1) return 2;
+          return 1;
+        }
+
+        function getCurrentQuestion() {
+          return state.questions[state.currentIndex] ?? null;
+        }
+
+        function getCurrentPart() {
+          const question = getCurrentQuestion();
+          return question ? partById.get(question.partId) : null;
+        }
+
+        function setFeedback(type, regionIds) {
+          state.feedback = { type, regionIds };
+        }
+
+        function clearFeedback() {
+          setFeedback("none", []);
+        }
+
+        function getCorrectRegionIds(partId) {
+          const custom = state.calibration.regions
+            .filter((region) => region.mode === state.mode && region.partId === partId)
+            .map((region) => region.id);
+          return custom;
+        }
+
+        function getCustomPartIdsForMode(mode) {
+          const ids = new Set();
+          for (const region of state.calibration.regions) {
+            if (region.mode === mode) ids.add(region.partId);
+          }
+          return ids;
+        }
+
+        function getRegionsForModeView(mode, view) {
+          const custom = state.calibration.regions.filter((region) => region.mode === mode && region.view === view);
+          return custom;
+        }
+
+        function clamp(value, min, max) {
+          return Math.max(min, Math.min(max, value));
+        }
+
+        function pointsToCoords(points) {
+          return points.flatMap((p) => [p.x, p.y]);
+        }
+
+        function getRegionBounds(region) {
+          if (region.shape === "rect") {
+            return {
+              minX: region.coords[0],
+              minY: region.coords[1],
+              maxX: region.coords[0] + region.coords[2],
+              maxY: region.coords[1] + region.coords[3],
+            };
+          }
+          if (region.shape === "ellipse") {
+            return {
+              minX: region.coords[0] - region.coords[2],
+              minY: region.coords[1] - region.coords[3],
+              maxX: region.coords[0] + region.coords[2],
+              maxY: region.coords[1] + region.coords[3],
+            };
+          }
+          const xs = [];
+          const ys = [];
+          for (let i = 0; i < region.coords.length; i += 2) {
+            xs.push(region.coords[i]);
+            ys.push(region.coords[i + 1]);
+          }
+          return {
+            minX: Math.min(...xs),
+            minY: Math.min(...ys),
+            maxX: Math.max(...xs),
+            maxY: Math.max(...ys),
+          };
+        }
+
+        function addCalibrationRegionObject({ view, shape, coords }) {
+          if (!state.mode || !state.calibration.selectedPartId) return;
+          const { nextId, regions, selectedPartId, replaceAppliedKeys } = state.calibration;
+          const targetKey = `${state.mode}|${selectedPartId}|${view}`;
+          const shouldReplaceOld = !replaceAppliedKeys[targetKey];
+          const filteredRegions = shouldReplaceOld
+            ? regions.filter(
+              (region) => !(region.mode === state.mode && region.partId === selectedPartId && region.view === view)
+            )
+            : regions;
+          const replacedCount = shouldReplaceOld ? regions.length - filteredRegions.length : 0;
+          const newRegion = {
+            id: `cal-${nextId}`,
+            mode: state.mode,
+            partId: selectedPartId,
+            view,
+            shape,
+            coords,
+          };
+
+          const label = partById.get(selectedPartId)?.label ?? selectedPartId;
+          state.calibration = {
+            ...state.calibration,
+            nextId: nextId + 1,
+            selectedRegionId: newRegion.id,
+            regions: [...filteredRegions, newRegion],
+            replaceAppliedKeys: {
+              ...replaceAppliedKeys,
+              [targetKey]: true,
+            },
+            status: replacedCount > 0
+              ? `Ersatte ${replacedCount} äldre markeringar för ${label} (${view === "front" ? "framsida" : "baksida"}).`
+              : `Lade till markering för ${label} (${view === "front" ? "framsida" : "baksida"}).`,
+          };
+          saveStoredCalibrationRegions(state.calibration.regions);
+          render();
+        }
+
+        function addCalibrationRegion(view, point) {
+          if (!state.mode || !state.calibration.selectedPartId) return;
+          const { shape, sizeX, sizeY } = state.calibration;
+          let coords;
+
+          if (shape === "rect") {
+            const width = clamp(sizeX, 1, 60);
+            const height = clamp(sizeY, 1, 60);
+            coords = [clamp(point.x - width / 2, 0, 100 - width), clamp(point.y - height / 2, 0, 100 - height), width, height];
+          } else {
+            const rx = clamp(sizeX / 2, 0.5, 30);
+            const ry = clamp(sizeY / 2, 0.5, 30);
+            coords = [clamp(point.x, rx, 100 - rx), clamp(point.y, ry, 100 - ry), rx, ry];
+          }
+
+          addCalibrationRegionObject({ view, shape, coords });
+        }
+
+        function addCalibrationRegionFromBox(view, startPoint, endPoint) {
+          if (!state.mode || !state.calibration.selectedPartId) return;
+          const { shape } = state.calibration;
+          const minX = clamp(Math.min(startPoint.x, endPoint.x), 0, 100);
+          const maxX = clamp(Math.max(startPoint.x, endPoint.x), 0, 100);
+          const minY = clamp(Math.min(startPoint.y, endPoint.y), 0, 100);
+          const maxY = clamp(Math.max(startPoint.y, endPoint.y), 0, 100);
+          const width = clamp(maxX - minX, 1, 100);
+          const height = clamp(maxY - minY, 1, 100);
+
+          if (shape === "rect") {
+            addCalibrationRegionObject({
+              view,
+              shape: "rect",
+              coords: [clamp(minX, 0, 100 - width), clamp(minY, 0, 100 - height), width, height],
+            });
+            return;
+          }
+
+          if (shape === "ellipse") {
+            addCalibrationRegionObject({
+              view,
+              shape: "ellipse",
+              coords: [minX + width / 2, minY + height / 2, width / 2, height / 2],
+            });
+          }
+        }
+
+        function addCalibrationFreehand(view, points) {
+          if (!points || points.length < 3) return;
+          addCalibrationRegionObject({
+            view,
+            shape: "polygon",
+            coords: pointsToCoords(points),
+          });
+        }
+
+        function getCalibrationRegionById(regionId) {
+          return state.calibration.regions.find((region) => region.id === regionId) ?? null;
+        }
+
+        function setCalibrationSelection(regionId, shouldRender = true) {
+          const region = getCalibrationRegionById(regionId);
+          if (!region) return;
+          const selectedPartId = region.partId;
+          const shape = region.shape;
+          const bounds = getRegionBounds(region);
+          const sizeX = shape === "rect" ? region.coords[2] : shape === "ellipse" ? region.coords[2] * 2 : bounds.maxX - bounds.minX;
+          const sizeY = shape === "rect" ? region.coords[3] : shape === "ellipse" ? region.coords[3] * 2 : bounds.maxY - bounds.minY;
+          state.calibration = {
+            ...state.calibration,
+            selectedRegionId: region.id,
+            selectedPartId,
+            shape,
+            sizeX,
+            sizeY,
+            status: `Valde markering ${region.id}. Dra för att flytta eller ändra storlek med reglagen.`,
+          };
+          if (shouldRender) render();
+        }
+
+        function updateCalibrationRegion(regionId, updater) {
+          const regions = state.calibration.regions.map((region) => (region.id === regionId ? updater(region) : region));
+          state.calibration = {
+            ...state.calibration,
+            regions,
+          };
+          saveStoredCalibrationRegions(regions);
+        }
+
+        function applySizeToSelectedRegion(sizeX, sizeY) {
+          const regionId = state.calibration.selectedRegionId;
+          if (!regionId) return;
+          updateCalibrationRegion(regionId, (region) => {
+            if (region.shape === "polygon") {
+              return region;
+            }
+            if (region.shape === "rect") {
+              const width = clamp(sizeX, 1, 60);
+              const height = clamp(sizeY, 1, 60);
+              const x = clamp(region.coords[0], 0, 100 - width);
+              const y = clamp(region.coords[1], 0, 100 - height);
+              return { ...region, coords: [x, y, width, height] };
+            }
+            const rx = clamp(sizeX / 2, 0.5, 30);
+            const ry = clamp(sizeY / 2, 0.5, 30);
+            const cx = clamp(region.coords[0], rx, 100 - rx);
+            const cy = clamp(region.coords[1], ry, 100 - ry);
+            return { ...region, coords: [cx, cy, rx, ry] };
+          });
+        }
+
+        function moveCalibrationRegion(regionId, point, dragOffset = null) {
+          updateCalibrationRegion(regionId, (region) => {
+            if (region.shape === "rect") {
+              const width = region.coords[2];
+              const height = region.coords[3];
+              const offsetX = dragOffset?.offsetX ?? width / 2;
+              const offsetY = dragOffset?.offsetY ?? height / 2;
+              const x = clamp(point.x - offsetX, 0, 100 - width);
+              const y = clamp(point.y - offsetY, 0, 100 - height);
+              return { ...region, coords: [x, y, width, height] };
+            }
+            const rx = region.coords[2];
+            const ry = region.coords[3];
+            const offsetX = dragOffset?.offsetX ?? 0;
+            const offsetY = dragOffset?.offsetY ?? 0;
+            if (region.shape === "ellipse") {
+              const cx = clamp(point.x - offsetX, rx, 100 - rx);
+              const cy = clamp(point.y - offsetY, ry, 100 - ry);
+              return { ...region, coords: [cx, cy, rx, ry] };
+            }
+
+            const bounds = getRegionBounds(region);
+            const centerX = (bounds.minX + bounds.maxX) / 2;
+            const centerY = (bounds.minY + bounds.maxY) / 2;
+            let dx = point.x - offsetX - centerX;
+            let dy = point.y - offsetY - centerY;
+            dx = clamp(dx, -bounds.minX, 100 - bounds.maxX);
+            dy = clamp(dy, -bounds.minY, 100 - bounds.maxY);
+            const movedCoords = [];
+            for (let i = 0; i < region.coords.length; i += 2) {
+              movedCoords.push(region.coords[i] + dx, region.coords[i + 1] + dy);
+            }
+            return { ...region, coords: movedCoords };
+          });
+        }
+
+        function buildPreviewRegions(view) {
+          if (!state.calibration.enabled || !state.mode) return [];
+          const { shape, sizeX, sizeY, selectedPartId, preview, drawing } = state.calibration;
+          if (!selectedPartId) return [];
+
+          if (drawing && drawing.view === view) {
+            if (drawing.type === "freehand" && drawing.points.length > 1) {
+              return [
+                {
+                  id: "cal-preview",
+                  mode: state.mode,
+                  partId: selectedPartId,
+                  view,
+                  shape: "polygon",
+                  coords: pointsToCoords(drawing.points),
+                },
+              ];
+            }
+
+            if (drawing.type === "box") {
+              const a = drawing.start;
+              const b = drawing.current;
+              const minX = Math.min(a.x, b.x);
+              const maxX = Math.max(a.x, b.x);
+              const minY = Math.min(a.y, b.y);
+              const maxY = Math.max(a.y, b.y);
+              if (shape === "rect") {
+                return [
+                  {
+                    id: "cal-preview",
+                    mode: state.mode,
+                    partId: selectedPartId,
+                    view,
+                    shape: "rect",
+                    coords: [minX, minY, Math.max(1, maxX - minX), Math.max(1, maxY - minY)],
+                  },
+                ];
+              }
+              return [
+                {
+                  id: "cal-preview",
+                  mode: state.mode,
+                  partId: selectedPartId,
+                  view,
+                  shape: "ellipse",
+                  coords: [minX + (maxX - minX) / 2, minY + (maxY - minY) / 2, Math.max(0.5, (maxX - minX) / 2), Math.max(0.5, (maxY - minY) / 2)],
+                },
+              ];
+            }
+          }
+
+          if (!preview || preview.view !== view || shape === "freehand") return [];
+          if (shape === "rect") {
+            const width = clamp(sizeX, 1, 60);
+            const height = clamp(sizeY, 1, 60);
+            return [
+              {
+                id: "cal-preview",
+                mode: state.mode,
+                partId: selectedPartId,
+                view,
+                shape: "rect",
+                coords: [clamp(preview.x - width / 2, 0, 100 - width), clamp(preview.y - height / 2, 0, 100 - height), width, height],
+              },
+            ];
+          }
+          const rx = clamp(sizeX / 2, 0.5, 30);
+          const ry = clamp(sizeY / 2, 0.5, 30);
+          return [
+            {
+              id: "cal-preview",
+              mode: state.mode,
+              partId: selectedPartId,
+              view,
+              shape: "ellipse",
+              coords: [clamp(preview.x, rx, 100 - rx), clamp(preview.y, ry, 100 - ry), rx, ry],
+            },
+          ];
+        }
+
+        function exportCalibrationJson() {
+          return JSON.stringify(state.calibration.regions, null, 2);
+        }
+
+        function pointInRegion(x, y, region) {
+          if (region.shape === "rect") {
+            const [rx, ry, w, h] = region.coords;
+            return x >= rx && x <= rx + w && y >= ry && y <= ry + h;
+          }
+
+          if (region.shape === "ellipse") {
+            const [cx, cy, rx, ry] = region.coords;
+            if (rx <= 0 || ry <= 0) return false;
+            const dx = (x - cx) / rx;
+            const dy = (y - cy) / ry;
+            return dx * dx + dy * dy <= 1;
+          }
+
+          if (region.shape === "polygon") {
+            let inside = false;
+            const pts = region.coords;
+            const n = pts.length / 2;
+            for (let i = 0, j = n - 1; i < n; j = i++) {
+              const xi = pts[i * 2];
+              const yi = pts[i * 2 + 1];
+              const xj = pts[j * 2];
+              const yj = pts[j * 2 + 1];
+              const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi || 1e-9) + xi;
+              if (intersects) inside = !inside;
+            }
+            return inside;
+          }
+
+          return false;
+        }
+
+        function getClickPointInSvg(svg, event) {
+          const rect = svg.getBoundingClientRect();
+          if (!rect.width || !rect.height) return null;
+          return {
+            x: ((event.clientX - rect.left) / rect.width) * 100,
+            y: ((event.clientY - rect.top) / rect.height) * 100,
+          };
+        }
+
+        function startGame(mode) {
+          const customPartIds = getCustomPartIdsForMode(mode);
+          const eligibleParts = partsByMode[mode].filter((part) => customPartIds.has(part.id));
+          const hasCustomRegions = eligibleParts.length > 0;
+          const questionPool = hasCustomRegions ? eligibleParts : partsByMode[mode];
+          const currentSelection = state.calibration.selectedPartId;
+          const selectionBelongsToMode = currentSelection && partById.get(currentSelection)?.mode === mode;
+          const questions = shuffle(questionPool.map((part) => ({ partId: part.id })));
+          state = {
+            ...state,
+            view: "quiz",
+            mode,
+            questions,
+            currentIndex: 0,
+            score: 0,
+            mistakes: 0,
+            locked: false,
+            feedback: { type: "none", regionIds: [] },
+            calibration: {
+              ...state.calibration,
+              selectedPartId: selectionBelongsToMode ? currentSelection : partsByMode[mode][0]?.id ?? null,
+              selectedRegionId: null,
+              preview: null,
+              dragging: null,
+              replaceAppliedKeys: {},
+              status: hasCustomRegions
+                ? ""
+                : "Inga egna markeringar finns ännu. Öppna justeringsläge och börja rita.",
+            },
+          };
+          render();
+        }
+
+        function goToMenu() {
+          const imageErrors = state.imageErrors;
+          state = {
+            ...createInitialState(),
+            imageErrors,
+          };
+          render();
+        }
+
+        function advanceToNextQuestion() {
+          const nextIndex = state.currentIndex + 1;
+          if (nextIndex >= state.questions.length) {
+            state.currentIndex = nextIndex;
+            state.view = "gameover";
+            state.mistakes = 0;
+            state.locked = false;
+            clearFeedback();
+            render();
+            return;
+          }
+
+          state.currentIndex = nextIndex;
+          state.mistakes = 0;
+          state.locked = false;
+          clearFeedback();
+          render();
+        }
+
+        function revealCorrectAnswer() {
+          const question = getCurrentQuestion();
+          if (!question) return;
+          state.locked = true;
+          setFeedback("reveal", getCorrectRegionIds(question.partId));
+          render();
+          setTimeout(() => {
+            advanceToNextQuestion();
+          }, 1200);
+        }
+
+        function handleSvgClick(svg, event) {
+          if (state.view !== "quiz" || !state.mode) return;
+
+          const view = svg.dataset.hitboxView;
+          if (!view) return;
+
+          const point = getClickPointInSvg(svg, event);
+          if (!point) return;
+
+          if (state.calibration.enabled) {
+            if (state.calibration.suppressClick) {
+              state.calibration = { ...state.calibration, suppressClick: false };
+              return;
+            }
+            if (state.calibration.dragging) return;
+            if (state.calibration.shape === "freehand") {
+              return;
+            }
+            if (state.calibration.drawing) return;
+            addCalibrationRegion(view, point);
+            return;
+          }
+
+          if (state.locked) return;
+
+          const question = getCurrentQuestion();
+          if (!question) return;
+
+          const regions = getRegionsForModeView(state.mode, view);
+          const hitRegions = regions.filter((region) => pointInRegion(point.x, point.y, region));
+          const correctRegionIds = getCorrectRegionIds(question.partId);
+          const isCorrect = hitRegions.some((region) => correctRegionIds.includes(region.id));
+
+          if (isCorrect) {
+            handleRegionSelection(correctRegionIds[0] ?? null, true);
+            return;
+          }
+
+          handleRegionSelection(hitRegions[0]?.id ?? null, false);
+        }
+
+        function handleSvgPointerMove(svg, event) {
+          if (state.view !== "quiz" || !state.calibration.enabled) return;
+          const view = svg.dataset.hitboxView;
+          if (!view) return;
+          const point = getClickPointInSvg(svg, event);
+          if (!point) return;
+
+          const drawing = state.calibration.drawing;
+          if (drawing && drawing.view === view) {
+            if (drawing.type === "freehand") {
+              state.calibration = {
+                ...state.calibration,
+                drawing: {
+                  ...drawing,
+                  points: [...drawing.points, point],
+                },
+                preview: { ...point, view },
+              };
+              render();
+            } else {
+              state.calibration = {
+                ...state.calibration,
+                drawing: {
+                  ...drawing,
+                  current: point,
+                },
+                preview: { ...point, view },
+              };
+              render();
+            }
+            return;
+          }
+
+          const dragging = state.calibration.dragging;
+          if (dragging && dragging.view === view) {
+            moveCalibrationRegion(dragging.regionId, point, dragging);
+            state.calibration = {
+              ...state.calibration,
+              preview: { ...point, view },
+            };
+            render();
+            return;
+          }
+
+          state.calibration = {
+            ...state.calibration,
+            preview: { ...point, view },
+          };
+          render();
+        }
+
+        function handleSvgPointerDown(svg, event) {
+          if (state.view !== "quiz" || !state.calibration.enabled) return;
+          const point = getClickPointInSvg(svg, event);
+          if (!point) return;
+          const view = svg.dataset.hitboxView;
+          if (!view) return;
+
+          if (state.calibration.shape === "freehand") {
+            state.calibration = {
+              ...state.calibration,
+              drawing: {
+                type: "freehand",
+                view,
+                start: point,
+                current: point,
+                points: [point],
+              },
+              dragging: null,
+              preview: { ...point, view },
+              status: "Frihand aktiv. Håll nere musknappen och släpp för att spara.",
+            };
+            svg.setPointerCapture?.(event.pointerId);
+            event.preventDefault();
+            render();
+            return;
+          }
+
+          const regionEl = event.target.closest("[data-region-id]");
+          const regionId = regionEl?.dataset?.regionId;
+          if (regionId && regionId.startsWith("cal-")) {
+            const region = getCalibrationRegionById(regionId);
+            if (!region) return;
+            const bounds = getRegionBounds(region);
+            const centerX = (bounds.minX + bounds.maxX) / 2;
+            const centerY = (bounds.minY + bounds.maxY) / 2;
+            state.calibration = {
+              ...state.calibration,
+              dragging: {
+                regionId,
+                view: region.view,
+                offsetX: region.shape === "rect" ? point.x - region.coords[0] : point.x - centerX,
+                offsetY: region.shape === "rect" ? point.y - region.coords[1] : point.y - centerY,
+              },
+              preview: { ...point, view: region.view },
+            };
+            setCalibrationSelection(regionId, false);
+            svg.setPointerCapture?.(event.pointerId);
+            event.preventDefault();
+            render();
+            return;
+          }
+
+          state.calibration = {
+            ...state.calibration,
+            drawing: {
+              type: "box",
+              view,
+              start: point,
+              current: point,
+            },
+            preview: { ...point, view },
+          };
+          svg.setPointerCapture?.(event.pointerId);
+          event.preventDefault();
+          render();
+        }
+
+        function handleSvgPointerUp(svg, event) {
+          if (!state.calibration.enabled) return;
+
+          if (state.calibration.dragging) {
+            state.calibration = {
+              ...state.calibration,
+              dragging: null,
+              suppressClick: true,
+              status: "Markering flyttad.",
+            };
+            svg?.releasePointerCapture?.(event.pointerId);
+            render();
+            return;
+          }
+
+          const drawing = state.calibration.drawing;
+          if (!drawing) return;
+
+          if (drawing.type === "freehand") {
+            const releasePoint = svg ? getClickPointInSvg(svg, event) : null;
+            const points = [...(drawing.points ?? [])];
+            if (releasePoint) points.push(releasePoint);
+            if (points.length >= 3) {
+              addCalibrationFreehand(drawing.view, points);
+            } else {
+              addCalibrationRegion(drawing.view, releasePoint || drawing.current || drawing.start);
+            }
+            state.calibration = {
+              ...state.calibration,
+              drawing: null,
+              preview: releasePoint
+                ? { ...releasePoint, view: drawing.view }
+                : drawing.current
+                  ? { ...drawing.current, view: drawing.view }
+                  : state.calibration.preview,
+              suppressClick: true,
+              status: "Frihandsmarkering sparad.",
+            };
+            svg?.releasePointerCapture?.(event.pointerId);
+            render();
+            return;
+          } else {
+            const dx = Math.abs(drawing.current.x - drawing.start.x);
+            const dy = Math.abs(drawing.current.y - drawing.start.y);
+            if (dx < 0.6 && dy < 0.6) {
+              addCalibrationRegion(drawing.view, drawing.current);
+            } else {
+              addCalibrationRegionFromBox(drawing.view, drawing.start, drawing.current);
+            }
+          }
+
+          state.calibration = {
+            ...state.calibration,
+            drawing: null,
+            suppressClick: true,
+          };
+          svg?.releasePointerCapture?.(event.pointerId);
+          render();
+        }
+
+        function findSvgForCalibrationState() {
+          if (!state.calibration.enabled) return null;
+          const activeView = state.calibration.drawing?.view || state.calibration.dragging?.view;
+          if (!activeView) return null;
+          return app.querySelector(`svg[data-hitbox-view="${activeView}"]`);
+        }
+
+        function getActiveCalibrationSvg(eventTarget) {
+          const directSvg = eventTarget?.closest?.("svg[data-hitbox-view]");
+          return directSvg || findSvgForCalibrationState();
+        }
+
+        function handleRegionSelection(regionId, isCorrectOverride = null) {
+          if (state.view !== "quiz" || state.locked) return;
+
+          const question = getCurrentQuestion();
+          if (!question) return;
+
+          const correctRegionIds = getCorrectRegionIds(question.partId);
+          const isCorrect =
+            typeof isCorrectOverride === "boolean" ? isCorrectOverride : Boolean(regionId && correctRegionIds.includes(regionId));
+
+          if (isCorrect) {
+            state.score += pointsForMistakes(state.mistakes);
+            state.locked = true;
+            setFeedback("correct", correctRegionIds);
+            render();
+
+            setTimeout(() => {
+              advanceToNextQuestion();
+            }, 700);
+            return;
+          }
+
+          state.locked = true;
+          setFeedback("wrong", regionId ? [regionId] : []);
+          render();
+
+          setTimeout(() => {
+            state.mistakes += 1;
+            if (state.mistakes >= 3) {
+              revealCorrectAnswer();
+              return;
+            }
+            state.locked = false;
+            clearFeedback();
+            render();
+          }, 450);
+        }
+
+        function renderMenuView() {
+          return `
+            <section class="mx-auto flex min-h-[78vh] max-w-3xl items-center justify-center">
+              <div class="surface w-full rounded-3xl border border-blue-300/25 p-8 shadow-glow sm:p-10">
+                <p class="mb-4 inline-flex rounded-full border border-blue-300/30 bg-blue-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-blue-200">
+                  Interaktiv utbildning
+                </p>
+                <h1 class="text-4xl font-black tracking-tight text-blue-50 sm:text-5xl">AnatomiQuiz</h1>
+                <p class="mt-4 max-w-2xl text-lg text-slate-300">
+                  Välj ett läge och klicka på rätt del i kroppen. Du får mer poäng ju snabbare du svarar rätt.
+                </p>
+                <div class="mt-8 grid gap-4 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    data-action="start-skeleton"
+                    class="group rounded-2xl border border-blue-400/40 bg-slate-800/90 p-5 text-left shadow-lg transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-slate-700/90"
+                  >
+                    <p class="text-xs font-semibold uppercase tracking-wider text-blue-200">Läge 1</p>
+                    <p class="mt-1 text-2xl font-bold text-slate-50">Träna Skelettet</p>
+                    <p class="mt-2 text-sm text-slate-300">Identifiera ben och skelettdelar på fram- och baksida.</p>
+                  </button>
+                  <button
+                    type="button"
+                    data-action="start-muscle"
+                    class="group rounded-2xl border border-blue-400/40 bg-slate-800/90 p-5 text-left shadow-lg transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-slate-700/90"
+                  >
+                    <p class="text-xs font-semibold uppercase tracking-wider text-blue-200">Läge 2</p>
+                    <p class="mt-1 text-2xl font-bold text-slate-50">Träna Musklerna</p>
+                    <p class="mt-2 text-sm text-slate-300">Klicka på rätt muskel i bilderna och samla poäng.</p>
+                  </button>
+                </div>
+              </div>
+            </section>
+          `;
+        }
+
+        function renderShape(region) {
+          const classes = ["quiz-region"];
+          const isCalibrationRegion = region.id.startsWith("cal-");
+
+          if (isCalibrationRegion && state.calibration.enabled) {
+            classes.push("is-calibration");
+          }
+          if (region.id === "cal-preview" && state.calibration.enabled) {
+            classes.push("is-preview");
+          }
+          if (region.id === state.calibration.selectedRegionId && state.calibration.enabled) {
+            classes.push("is-calibration-selected");
+          }
+          if (state.feedback.regionIds.includes(region.id)) {
+            if (state.feedback.type === "correct") classes.push("is-correct");
+            if (state.feedback.type === "wrong") classes.push("is-wrong");
+            if (state.feedback.type === "reveal") classes.push("is-reveal");
+          }
+
+          const common = `class="${classes.join(" ")}" data-region-id="${region.id}"`;
+
+          if (region.shape === "rect") {
+            const [x, y, width, height] = region.coords;
+            return `<rect ${common} x="${x}" y="${y}" width="${width}" height="${height}" />`;
+          }
+
+          if (region.shape === "ellipse") {
+            const [cx, cy, rx, ry] = region.coords;
+            return `<ellipse ${common} cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" />`;
+          }
+
+          if (region.shape === "polygon") {
+            const points = [];
+            for (let i = 0; i < region.coords.length; i += 2) {
+              points.push(`${region.coords[i]},${region.coords[i + 1]}`);
+            }
+            return `<polygon ${common} points="${points.join(" ")}" />`;
+          }
+
+          return "";
+        }
+
+        function renderPanel(view) {
+          const mode = state.mode;
+          const key = `${mode}-${view}`;
+          const regions = getRegionsForModeView(mode, view);
+          const previewRegions = buildPreviewRegions(view);
+          const renderRegions = [...regions, ...previewRegions];
+          const imagePath = IMAGE_PATHS[mode][view];
+          const panelTitle = view === "front" ? "Framsida" : "Baksida";
+          const missing = Boolean(state.imageErrors[key]);
+
+          return `
+            <article class="surface rounded-2xl border border-blue-300/20 p-4 shadow-glow sm:p-5">
+              <h3 class="mb-3 text-lg font-semibold text-blue-100">${panelTitle}</h3>
+              <div class="anatomy-frame relative mx-auto w-full max-w-[440px] overflow-hidden rounded-xl border border-slate-600/60 bg-slate-900/70">
+                ${
+                  missing
+                    ? `<div class="flex h-full items-center justify-center px-4 text-center text-sm text-red-200">
+                        Bild saknas: <code class="ml-2 rounded bg-black/30 px-2 py-1 text-red-100">${imagePath}</code>
+                      </div>`
+                    : `<img
+                        src="${imagePath}"
+                        data-image-key="${key}"
+                        alt="${modeLabel(mode)} ${panelTitle.toLowerCase()}"
+                        class="absolute inset-0 h-full w-full select-none object-fill"
+                        draggable="false"
+                      />
+                      <svg
+                        class="hitbox-svg ${state.locked ? "is-locked" : ""}"
+                        data-hitbox-view="${view}"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        width="100%"
+                        height="100%"
+                        aria-label="Klickbara regioner"
+                      >
+                        <rect class="hitbox-capture" x="0" y="0" width="100" height="100" />
+                        ${renderRegions.map(renderShape).join("")}
+                      </svg>`
+                }
+              </div>
+            </article>
+          `;
+        }
+
+        function renderCalibrationPanel() {
+          if (!state.calibration.enabled) return "";
+          const partOptions = partsByMode[state.mode]
+            .map((part) => `<option value="${part.id}" ${state.calibration.selectedPartId === part.id ? "selected" : ""}>${part.label}</option>`)
+            .join("");
+
+          return `
+            <section class="surface rounded-2xl border border-amber-300/35 px-4 py-4 shadow-glow">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <p class="text-sm font-semibold uppercase tracking-wider text-amber-200">Justeringsläge aktivt</p>
+                <p class="text-xs text-slate-300">Rita med musen för frihand, eller dra ut ellips/rektangel</p>
+              </div>
+              <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <label class="text-xs text-slate-200">
+                  Del
+                  <select data-cal-field="selectedPartId" class="mt-1 w-full rounded-lg border border-slate-500/70 bg-slate-900/70 px-2 py-2 text-sm text-slate-100">
+                    ${partOptions}
+                  </select>
+                </label>
+                <label class="text-xs text-slate-200">
+                  Form
+                  <select data-cal-field="shape" class="mt-1 w-full rounded-lg border border-slate-500/70 bg-slate-900/70 px-2 py-2 text-sm text-slate-100">
+                    <option value="ellipse" ${state.calibration.shape === "ellipse" ? "selected" : ""}>Ellips</option>
+                    <option value="rect" ${state.calibration.shape === "rect" ? "selected" : ""}>Rektangel</option>
+                    <option value="freehand" ${state.calibration.shape === "freehand" ? "selected" : ""}>Frihand</option>
+                  </select>
+                </label>
+                <label class="text-xs text-slate-200">
+                  Bredd (${state.calibration.sizeX.toFixed(1)})
+                  <input data-cal-field="sizeX" type="range" min="2" max="30" step="0.5" value="${state.calibration.sizeX}" class="mt-2 w-full" ${state.calibration.shape === "freehand" ? "disabled" : ""} />
+                </label>
+                <label class="text-xs text-slate-200">
+                  Höjd (${state.calibration.sizeY.toFixed(1)})
+                  <input data-cal-field="sizeY" type="range" min="2" max="30" step="0.5" value="${state.calibration.sizeY}" class="mt-2 w-full" ${state.calibration.shape === "freehand" ? "disabled" : ""} />
+                </label>
+                <label class="flex items-center gap-2 rounded-lg border border-slate-500/70 bg-slate-900/70 px-3 py-2 text-xs text-slate-100">
+                  <input data-cal-field="onlyCustom" type="checkbox" ${state.calibration.onlyCustom ? "checked" : ""} />
+                  Visa bara egna markeringar
+                </label>
+              </div>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button data-action="cal-undo" class="rounded-lg border border-slate-400/60 bg-slate-800/70 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700/70">Ångra senaste</button>
+                <button data-action="cal-clear-selected" class="rounded-lg border border-red-300/60 bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-100 hover:bg-red-500/30">Rensa vald del</button>
+                <button data-action="cal-copy" class="rounded-lg border border-amber-300/60 bg-amber-500/20 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-500/30">Kopiera JSON</button>
+                <button data-action="cal-import" class="rounded-lg border border-emerald-300/60 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/30">Importera JSON</button>
+                <button data-action="cal-share" class="rounded-lg border border-cyan-300/60 bg-cyan-500/20 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/30">Kopiera delningslänk</button>
+              </div>
+              <p class="mt-2 text-xs text-slate-300">${state.calibration.regions.length} egna markeringar skapade.</p>
+              ${state.calibration.status ? `<p class="mt-1 text-xs text-amber-200">${state.calibration.status}</p>` : ""}
+            </section>
+          `;
+        }
+
+        function renderQuizView() {
+          const currentPart = getCurrentPart();
+          if (!currentPart) {
+            state.view = "gameover";
+            return renderGameOverView();
+          }
+
+          const questionNumber = state.currentIndex + 1;
+          const totalQuestions = state.questions.length;
+
+          return `
+            <section class="space-y-4 sm:space-y-5">
+              <header class="surface flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-300/25 px-4 py-3 shadow-glow sm:px-6">
+                <div>
+                  <p class="text-xs uppercase tracking-[0.2em] text-blue-200">${modeLabel(state.mode)}</p>
+                  <p class="text-xl font-bold text-slate-50">Fråga ${questionNumber} av ${totalQuestions}</p>
+                </div>
+                <div class="rounded-xl border border-blue-300/25 bg-blue-500/15 px-4 py-2">
+                  <p class="text-xs uppercase tracking-wider text-blue-100">Poäng</p>
+                  <p class="text-2xl font-black text-blue-50">${state.score}</p>
+                </div>
+                <button
+                  type="button"
+                  data-action="toggle-calibration"
+                  class="rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wider transition ${
+                    state.calibration.enabled
+                      ? "border-amber-300/70 bg-amber-500/25 text-amber-100 hover:bg-amber-500/35"
+                      : "border-slate-400/50 bg-slate-800/65 text-slate-100 hover:bg-slate-700/75"
+                  }"
+                >
+                  ${state.calibration.enabled ? "Stäng justeringsläge" : "Öppna justeringsläge"}
+                </button>
+              </header>
+
+              <section class="surface rounded-2xl border border-blue-300/25 px-5 py-4 shadow-glow">
+                <p class="text-sm uppercase tracking-widest text-blue-200">Hitta</p>
+                <p class="mt-1 text-3xl font-black text-slate-50">${currentPart.label}</p>
+                <p class="mt-2 text-sm text-slate-300">
+                  Rätt på första, andra och tredje försök ger 3, 2 respektive 1 poäng.
+                </p>
+              </section>
+
+              ${renderCalibrationPanel()}
+
+              <section class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                ${renderPanel("front")}
+                ${renderPanel("back")}
+              </section>
+            </section>
+          `;
+        }
+
+        function renderGameOverView() {
+          const maxScore = state.questions.length * 3;
+          return `
+            <section class="mx-auto flex min-h-[78vh] max-w-2xl items-center justify-center">
+              <div class="surface w-full rounded-3xl border border-blue-300/25 p-8 text-center shadow-glow sm:p-10">
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Resultat</p>
+                <h2 class="mt-2 text-4xl font-black text-blue-50">Game Over</h2>
+                <p class="mt-4 text-lg text-slate-200">Du fick <span class="font-bold text-blue-200">${state.score}</span> av <span class="font-bold text-blue-200">${maxScore}</span> poäng.</p>
+                <button
+                  type="button"
+                  data-action="play-again"
+                  class="mt-8 rounded-xl border border-blue-300/30 bg-blue-600 px-6 py-3 text-lg font-bold text-white transition hover:bg-blue-500"
+                >
+                  Spela igen
+                </button>
+              </div>
+            </section>
+          `;
+        }
+
+        function render() {
+          if (state.view === "menu") {
+            app.innerHTML = renderMenuView();
+            return;
+          }
+
+          if (state.view === "quiz") {
+            app.innerHTML = renderQuizView();
+            return;
+          }
+
+          app.innerHTML = renderGameOverView();
+        }
+
+        app.addEventListener("click", (event) => {
+          const actionButton = event.target.closest("[data-action]");
+          if (actionButton) {
+            const action = actionButton.dataset.action;
+            if (action === "start-skeleton") startGame("skeleton");
+            if (action === "start-muscle") startGame("muscle");
+            if (action === "play-again") goToMenu();
+            if (action === "toggle-calibration") {
+              state.calibration = {
+                ...state.calibration,
+                enabled: !state.calibration.enabled,
+                drawing: null,
+                dragging: null,
+                preview: null,
+                status: "",
+              };
+              clearFeedback();
+              state.locked = false;
+              render();
+            }
+            if (action === "cal-undo") {
+              if (state.calibration.regions.length > 0) {
+                const regions = [...state.calibration.regions];
+                const removed = regions.pop();
+                state.calibration = {
+                  ...state.calibration,
+                  regions,
+                  selectedRegionId: state.calibration.selectedRegionId === removed?.id ? null : state.calibration.selectedRegionId,
+                  status: "Tog bort senaste markeringen.",
+                };
+                saveStoredCalibrationRegions(regions);
+                render();
+              }
+            }
+            if (action === "cal-clear-selected") {
+              const selected = state.calibration.selectedPartId;
+              const regions = state.calibration.regions.filter(
+                (region) => !(region.mode === state.mode && region.partId === selected)
+              );
+              state.calibration = {
+                ...state.calibration,
+                regions,
+                selectedRegionId: null,
+                status: "Rensade markeringar för vald del i aktuellt läge.",
+              };
+              saveStoredCalibrationRegions(regions);
+              render();
+            }
+            if (action === "cal-copy") {
+              const json = exportCalibrationJson();
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(json).then(
+                  () => {
+                    state.calibration = {
+                      ...state.calibration,
+                      status: "JSON kopierad till urklipp.",
+                    };
+                    render();
+                  },
+                  () => {
+                    state.calibration = {
+                      ...state.calibration,
+                      status: "Kunde inte kopiera automatiskt. Öppna konsolen och kör exportCalibrationJson().",
+                    };
+                    window.exportCalibrationJson = exportCalibrationJson;
+                    render();
+                  }
+                );
+              } else {
+                window.exportCalibrationJson = exportCalibrationJson;
+                state.calibration = {
+                  ...state.calibration,
+                  status: "Urklipp saknas. Kör exportCalibrationJson() i konsolen.",
+                };
+                render();
+              }
+            }
+            if (action === "cal-import") {
+              const input = window.prompt("Klistra in JSON från Kopiera JSON:");
+              if (!input) {
+                state.calibration = {
+                  ...state.calibration,
+                  status: "Import avbruten.",
+                };
+                render();
+                return;
+              }
+              try {
+                const parsed = JSON.parse(input);
+                applyImportedRegions(parsed);
+              } catch {
+                state.calibration = {
+                  ...state.calibration,
+                  status: "Ogiltig JSON. Kontrollera formatet och försök igen.",
+                };
+                render();
+              }
+            }
+            if (action === "cal-share") {
+              const encoded = encodeRegionsForUrl(state.calibration.regions);
+              if (!encoded) {
+                state.calibration = {
+                  ...state.calibration,
+                  status: "Kunde inte skapa delningslänk.",
+                };
+                render();
+                return;
+              }
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.set("regions", encoded);
+                const shareUrl = url.toString();
+                const lengthWarning = shareUrl.length > 7000
+                  ? " Varning: länken är lång och kan vara för stor för vissa plattformar."
+                  : "";
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(shareUrl).then(
+                    () => {
+                      state.calibration = {
+                        ...state.calibration,
+                        status: `Delningslänk kopierad (${shareUrl.length} tecken). Elever kan öppna länken direkt.${lengthWarning}`,
+                      };
+                      render();
+                    },
+                    () => {
+                      state.calibration = {
+                        ...state.calibration,
+                        status: `Kunde inte kopiera. Länken visas i konsolen (${shareUrl.length} tecken).${lengthWarning}`,
+                      };
+                      console.log("Delningslänk:", shareUrl);
+                      render();
+                    }
+                  );
+                } else {
+                  state.calibration = {
+                    ...state.calibration,
+                    status: `Urklipp saknas. Länken visas i konsolen (${shareUrl.length} tecken).${lengthWarning}`,
+                  };
+                  console.log("Delningslänk:", shareUrl);
+                  render();
+                }
+              } catch {
+                state.calibration = {
+                  ...state.calibration,
+                  status: "Kunde inte skapa delningslänk.",
+                };
+                render();
+              }
+            }
+            return;
+          }
+
+          const svgTarget = event.target.closest("svg[data-hitbox-view]");
+          if (svgTarget) {
+            handleSvgClick(svgTarget, event);
+          }
+        });
+
+        app.addEventListener("pointerdown", (event) => {
+          const svgTarget = event.target.closest("svg[data-hitbox-view]");
+          if (!svgTarget) return;
+          handleSvgPointerDown(svgTarget, event);
+        });
+
+        window.addEventListener("pointermove", (event) => {
+          const activeSvg = getActiveCalibrationSvg(event.target);
+          if (!activeSvg) return;
+          handleSvgPointerMove(activeSvg, event);
+        });
+
+        window.addEventListener("pointerup", (event) => {
+          const svgTarget = getActiveCalibrationSvg(event.target);
+          handleSvgPointerUp(svgTarget || null, event);
+        });
+
+        window.addEventListener("pointercancel", (event) => {
+          const svgTarget = getActiveCalibrationSvg(event.target);
+          handleSvgPointerUp(svgTarget || null, event);
+        });
+
+        // Pointer events are enough for modern browsers and avoid duplicate
+        // mouse+pointer sequences that can interrupt long freehand strokes.
+
+        app.addEventListener("input", (event) => {
+          const field = event.target?.dataset?.calField;
+          if (!field) return;
+          if (!state.calibration) return;
+
+          let value;
+          if (field === "onlyCustom") {
+            value = Boolean(event.target.checked);
+          } else if (field === "sizeX" || field === "sizeY") {
+            value = Number(event.target.value);
+          } else {
+            value = event.target.value;
+          }
+
+          state.calibration = {
+            ...state.calibration,
+            [field]: value,
+            status: "",
+          };
+
+          if (field === "sizeX" || field === "sizeY") {
+            applySizeToSelectedRegion(
+              field === "sizeX" ? value : state.calibration.sizeX,
+              field === "sizeY" ? value : state.calibration.sizeY
+            );
+          }
+
+          if (field === "shape" && value === "freehand") {
+            state.calibration = {
+              ...state.calibration,
+              selectedRegionId: null,
+              drawing: null,
+            };
+          }
+
+          if (field === "selectedPartId") {
+            state.calibration = {
+              ...state.calibration,
+              selectedRegionId: null,
+              drawing: null,
+              replaceAppliedKeys: {},
+            };
+          }
+
+          render();
+        });
+
+        app.addEventListener(
+          "error",
+          (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLImageElement)) return;
+            const imageKey = target.dataset.imageKey;
+            if (!imageKey || state.imageErrors[imageKey]) return;
+            state.imageErrors = {
+              ...state.imageErrors,
+              [imageKey]: true,
+            };
+            render();
+          },
+          true
+        );
+
+        window.importCalibrationJson = (jsonText) => {
+          const parsed = typeof jsonText === "string" ? JSON.parse(jsonText) : jsonText;
+          return applyImportedRegions(parsed);
+        };
+
+        await initializeBundledRegions();
+        render();
+      })();
+    </script>
+  </body>
+</html>
