@@ -251,6 +251,8 @@
 
         const CALIBRATION_STORAGE_KEY = "anatomiquiz.customRegions.v1";
         const BUNDLED_CALIBRATION_REGIONS_PATH = "data/muscles.json";
+        const ADMIN_AUTH_STORAGE_KEY = "anatomiquiz.adminAuth.v1";
+        const ADMIN_ACCESS_CODE = "Anatomi-Admin-2026";
 
         const partsByMode = PARTS.reduce(
           (acc, part) => {
@@ -338,6 +340,26 @@
             window.localStorage.setItem(CALIBRATION_STORAGE_KEY, JSON.stringify(regions));
           } catch {
             // Ignore quota/private mode errors.
+          }
+        }
+
+        function loadAdminAuthenticated() {
+          try {
+            return window.sessionStorage.getItem(ADMIN_AUTH_STORAGE_KEY) === "1";
+          } catch {
+            return false;
+          }
+        }
+
+        function saveAdminAuthenticated(isAuthenticated) {
+          try {
+            if (isAuthenticated) {
+              window.sessionStorage.setItem(ADMIN_AUTH_STORAGE_KEY, "1");
+            } else {
+              window.sessionStorage.removeItem(ADMIN_AUTH_STORAGE_KEY);
+            }
+          } catch {
+            // Ignore private mode/session storage errors.
           }
         }
 
@@ -569,6 +591,9 @@
             regionIds: [],
           },
           imageErrors: {},
+          admin: {
+            authenticated: loadAdminAuthenticated(),
+          },
           calibration: {
             enabled: false,
             selectedPartId: null,
@@ -1470,7 +1495,7 @@
         }
 
         function renderCalibrationPanel() {
-          if (!state.calibration.enabled) return "";
+          if (!state.admin.authenticated || !state.calibration.enabled) return "";
           const partOptions = partsByMode[state.mode]
             .map((part) => `<option value="${part.id}" ${state.calibration.selectedPartId === part.id ? "selected" : ""}>${part.label}</option>`)
             .join("");
@@ -1531,6 +1556,38 @@
 
           const questionNumber = state.currentIndex + 1;
           const totalQuestions = state.questions.length;
+          const adminControls = state.admin.authenticated
+            ? `
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-action="toggle-calibration"
+                    class="rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wider transition ${
+                      state.calibration.enabled
+                        ? "border-amber-300/70 bg-amber-500/25 text-amber-100 hover:bg-amber-500/35"
+                        : "border-slate-400/50 bg-slate-800/65 text-slate-100 hover:bg-slate-700/75"
+                    }"
+                  >
+                    ${state.calibration.enabled ? "Stäng justeringsläge" : "Öppna justeringsläge"}
+                  </button>
+                  <button
+                    type="button"
+                    data-action="admin-logout"
+                    class="rounded-xl border border-red-300/60 bg-red-500/20 px-3 py-2 text-xs font-bold uppercase tracking-wider text-red-100 transition hover:bg-red-500/30"
+                  >
+                    Lås admin
+                  </button>
+                </div>
+              `
+            : `
+                <button
+                  type="button"
+                  data-action="admin-login"
+                  class="rounded-xl border border-slate-400/50 bg-slate-800/65 px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-100 transition hover:bg-slate-700/75"
+                >
+                  Admin
+                </button>
+              `;
 
           return `
             <section class="space-y-4 sm:space-y-5">
@@ -1543,17 +1600,7 @@
                   <p class="text-xs uppercase tracking-wider text-blue-100">Poäng</p>
                   <p class="text-2xl font-black text-blue-50">${state.score}</p>
                 </div>
-                <button
-                  type="button"
-                  data-action="toggle-calibration"
-                  class="rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wider transition ${
-                    state.calibration.enabled
-                      ? "border-amber-300/70 bg-amber-500/25 text-amber-100 hover:bg-amber-500/35"
-                      : "border-slate-400/50 bg-slate-800/65 text-slate-100 hover:bg-slate-700/75"
-                  }"
-                >
-                  ${state.calibration.enabled ? "Stäng justeringsläge" : "Öppna justeringsläge"}
-                </button>
+                ${adminControls}
               </header>
 
               <section class="surface rounded-2xl border border-blue-300/25 px-5 py-4 shadow-glow">
@@ -1615,7 +1662,49 @@
             if (action === "start-skeleton") startGame("skeleton");
             if (action === "start-muscle") startGame("muscle");
             if (action === "play-again") goToMenu();
+            if (action === "admin-login") {
+              const code = window.prompt("Ange admin-kod:");
+              if (!code) return;
+              if (code === ADMIN_ACCESS_CODE) {
+                state.admin = { authenticated: true };
+                saveAdminAuthenticated(true);
+                state.calibration = {
+                  ...state.calibration,
+                  status: "Adminläge upplåst.",
+                };
+                render();
+              } else {
+                state.calibration = {
+                  ...state.calibration,
+                  enabled: false,
+                  status: "Fel admin-kod.",
+                };
+                render();
+              }
+            }
+            if (action === "admin-logout") {
+              state.admin = { authenticated: false };
+              saveAdminAuthenticated(false);
+              state.calibration = {
+                ...state.calibration,
+                enabled: false,
+                drawing: null,
+                dragging: null,
+                preview: null,
+                status: "",
+              };
+              render();
+            }
             if (action === "toggle-calibration") {
+              if (!state.admin.authenticated) {
+                state.calibration = {
+                  ...state.calibration,
+                  enabled: false,
+                  status: "Justeringsläge kräver admininloggning.",
+                };
+                render();
+                return;
+              }
               state.calibration = {
                 ...state.calibration,
                 enabled: !state.calibration.enabled,
