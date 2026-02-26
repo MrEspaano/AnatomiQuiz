@@ -106,6 +106,136 @@
         pointer-events: none;
       }
 
+      .result-shell {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .result-shell.result-high {
+        background:
+          radial-gradient(circle at 15% 5%, rgba(251, 191, 36, 0.38), transparent 40%),
+          radial-gradient(circle at 86% 14%, rgba(236, 72, 153, 0.25), transparent 38%),
+          linear-gradient(145deg, rgba(56, 22, 52, 0.9), rgba(30, 41, 59, 0.86));
+      }
+
+      .result-shell.result-mid {
+        background:
+          radial-gradient(circle at 18% 8%, rgba(45, 212, 191, 0.3), transparent 45%),
+          radial-gradient(circle at 86% 12%, rgba(59, 130, 246, 0.24), transparent 40%),
+          linear-gradient(145deg, rgba(14, 35, 61, 0.9), rgba(30, 41, 59, 0.86));
+      }
+
+      .result-shell.result-low {
+        background:
+          radial-gradient(circle at 12% 10%, rgba(148, 163, 184, 0.2), transparent 44%),
+          radial-gradient(circle at 88% 12%, rgba(96, 165, 250, 0.18), transparent 42%),
+          linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.85));
+      }
+
+      .result-badge {
+        animation: badge-pop 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+
+      .result-effects {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+
+      .confetti-piece {
+        position: absolute;
+        top: -12%;
+        left: var(--left, 50%);
+        width: var(--size, 10px);
+        height: var(--height, 18px);
+        border-radius: 2px;
+        opacity: 0.9;
+        transform: rotate(var(--rot, 0deg));
+        animation: confetti-fall var(--duration, 2.6s) linear forwards;
+        animation-delay: var(--delay, 0s);
+      }
+
+      .sparkle-dot {
+        position: absolute;
+        left: var(--left, 50%);
+        top: var(--top, 50%);
+        width: var(--size, 8px);
+        height: var(--size, 8px);
+        border-radius: 999px;
+        background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(56, 189, 248, 0.22));
+        box-shadow: 0 0 16px rgba(125, 211, 252, 0.6);
+        animation: sparkle-pop var(--duration, 1.8s) ease-in-out infinite;
+        animation-delay: var(--delay, 0s);
+      }
+
+      .low-wave {
+        position: absolute;
+        left: -15%;
+        right: -15%;
+        height: 38%;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: radial-gradient(ellipse at center, rgba(148, 163, 184, 0.12), rgba(2, 6, 23, 0));
+        animation: low-breathe 4.2s ease-in-out infinite;
+      }
+
+      .low-wave.wave-a {
+        bottom: -4%;
+      }
+
+      .low-wave.wave-b {
+        bottom: 10%;
+        animation-delay: 1.2s;
+      }
+
+      @keyframes confetti-fall {
+        0% {
+          transform: translate3d(0, 0, 0) rotate(0deg);
+          opacity: 0;
+        }
+        8% {
+          opacity: 0.95;
+        }
+        100% {
+          transform: translate3d(var(--drift, 0px), 120vh, 0) rotate(520deg);
+          opacity: 0;
+        }
+      }
+
+      @keyframes sparkle-pop {
+        0%, 100% {
+          transform: scale(0.7);
+          opacity: 0.25;
+        }
+        50% {
+          transform: scale(1.45);
+          opacity: 0.95;
+        }
+      }
+
+      @keyframes low-breathe {
+        0%, 100% {
+          transform: translateY(0) scale(1);
+          opacity: 0.35;
+        }
+        50% {
+          transform: translateY(-8px) scale(1.05);
+          opacity: 0.65;
+        }
+      }
+
+      @keyframes badge-pop {
+        from {
+          transform: translateY(10px) scale(0.9);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0) scale(1);
+          opacity: 1;
+        }
+      }
+
       @keyframes reveal-pulse {
         from {
           fill-opacity: 0.24;
@@ -114,6 +244,16 @@
         to {
           fill-opacity: 0.78;
           stroke-opacity: 1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .result-badge,
+        .confetti-piece,
+        .sparkle-dot,
+        .low-wave {
+          animation: none !important;
+          transform: none !important;
         }
       }
     </style>
@@ -253,6 +393,33 @@
         const BUNDLED_CALIBRATION_REGIONS_PATH = "data/muscles.json";
         const ADMIN_AUTH_STORAGE_KEY = "anatomiquiz.adminAuth.v1";
         const ADMIN_ACCESS_CODE = "Rorsoppen16";
+        const RESULT_THRESHOLDS = { high: 85, mid: 60 };
+        const RESULT_TIER_CONFIG = {
+          high: {
+            label: "Toppprestation",
+            heading: "Fantastiskt jobbat!",
+            coach: "Du satte nästan allt. Ditt detaljminne sitter riktigt bra.",
+            accentClass: "result-high",
+            badgeClass: "border-yellow-300/70 bg-yellow-400/20 text-yellow-100",
+            scoreClass: "text-yellow-200",
+          },
+          mid: {
+            label: "Stabil nivå",
+            heading: "Snyggt genomfört!",
+            coach: "Du är nära toppen. Ett varv till så sitter delarna ännu bättre.",
+            accentClass: "result-mid",
+            badgeClass: "border-cyan-300/70 bg-cyan-400/20 text-cyan-100",
+            scoreClass: "text-cyan-200",
+          },
+          low: {
+            label: "Bra start",
+            heading: "Bra kämpat!",
+            coach: "Nu vet du vad du ska nöta. Ta ett nytt försök direkt och lyft poängen.",
+            accentClass: "result-low",
+            badgeClass: "border-slate-300/70 bg-slate-400/20 text-slate-100",
+            scoreClass: "text-slate-200",
+          },
+        };
 
         const partsByMode = PARTS.reduce(
           (acc, part) => {
@@ -644,6 +811,80 @@
           if (mistakes <= 0) return 3;
           if (mistakes === 1) return 2;
           return 1;
+        }
+
+        function prefersReducedMotion() {
+          try {
+            return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          } catch {
+            return false;
+          }
+        }
+
+        function getResultTier(percent) {
+          if (percent >= RESULT_THRESHOLDS.high) return "high";
+          if (percent >= RESULT_THRESHOLDS.mid) return "mid";
+          return "low";
+        }
+
+        function getResultMetrics(score, questionsCount) {
+          const maxScore = Math.max(0, Number(questionsCount) * 3);
+          const safeScore = Number.isFinite(score) ? score : 0;
+          const boundedScore = maxScore > 0 ? clamp(safeScore, 0, maxScore) : 0;
+          const percent = maxScore > 0 ? Math.round((boundedScore / maxScore) * 100) : 0;
+          const tier = getResultTier(percent);
+          return { score: boundedScore, maxScore, percent, tier };
+        }
+
+        function getTierCopy(tier) {
+          const config = RESULT_TIER_CONFIG[tier] ?? RESULT_TIER_CONFIG.low;
+          return {
+            heading: config.heading,
+            coach: config.coach,
+            label: config.label,
+          };
+        }
+
+        function renderResultEffects(tier, reducedMotion) {
+          if (tier === "low") {
+            return `
+              <div class="result-effects" aria-hidden="true">
+                <div class="low-wave wave-a"></div>
+                <div class="low-wave wave-b"></div>
+              </div>
+            `;
+          }
+
+          if (reducedMotion) {
+            return `<div class="result-effects" aria-hidden="true"></div>`;
+          }
+
+          if (tier === "high") {
+            const palette = ["#facc15", "#fb7185", "#60a5fa", "#34d399", "#c084fc"];
+            const maxPieces = window.innerWidth < 640 ? 38 : 64;
+            const pieces = Array.from({ length: maxPieces }, (_, index) => {
+              const size = 6 + (index % 7);
+              const height = 10 + (index % 13);
+              const left = Math.round((index / maxPieces) * 100);
+              const duration = (180 + (index % 90)) / 100;
+              const delay = (index % 24) / 40;
+              const drift = (index % 2 === 0 ? 1 : -1) * (24 + (index % 26));
+              const rotation = (index * 17) % 360;
+              const color = palette[index % palette.length];
+              return `<span class="confetti-piece" style="--left:${left}%;--size:${size}px;--height:${height}px;--duration:${duration}s;--delay:${delay}s;--drift:${drift}px;--rot:${rotation}deg;background:${color};"></span>`;
+            }).join("");
+            return `<div class="result-effects" aria-hidden="true">${pieces}</div>`;
+          }
+
+          const sparkles = Array.from({ length: 22 }, (_, index) => {
+            const left = 12 + ((index * 37) % 76);
+            const top = 10 + ((index * 19) % 72);
+            const size = 5 + (index % 5);
+            const delay = (index % 9) / 8;
+            const duration = 1.3 + (index % 4) * 0.22;
+            return `<span class="sparkle-dot" style="--left:${left}%;--top:${top}%;--size:${size}px;--delay:${delay}s;--duration:${duration}s;"></span>`;
+          }).join("");
+          return `<div class="result-effects" aria-hidden="true">${sparkles}</div>`;
         }
 
         function getCurrentQuestion() {
@@ -1622,17 +1863,31 @@
         }
 
         function renderGameOverView() {
-          const maxScore = state.questions.length * 3;
+          const reducedMotion = prefersReducedMotion();
+          const metrics = getResultMetrics(state.score, state.questions.length);
+          const tierConfig = RESULT_TIER_CONFIG[metrics.tier] ?? RESULT_TIER_CONFIG.low;
+          const copy = getTierCopy(metrics.tier);
           return `
             <section class="mx-auto flex min-h-[78vh] max-w-2xl items-center justify-center">
-              <div class="surface w-full rounded-3xl border border-blue-300/25 p-8 text-center shadow-glow sm:p-10">
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Resultat</p>
-                <h2 class="mt-2 text-4xl font-black text-blue-50">Game Over</h2>
-                <p class="mt-4 text-lg text-slate-200">Du fick <span class="font-bold text-blue-200">${state.score}</span> av <span class="font-bold text-blue-200">${maxScore}</span> poäng.</p>
+              <div class="surface result-shell ${tierConfig.accentClass} w-full rounded-3xl border border-blue-300/25 p-7 text-center shadow-glow sm:p-10">
+                ${renderResultEffects(metrics.tier, reducedMotion)}
+                <p class="relative z-10 text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Resultat</p>
+                <h2 class="relative z-10 mt-2 text-4xl font-black text-blue-50 sm:text-5xl">${copy.heading}</h2>
+                <p class="relative z-10 mt-3 text-base text-slate-200 sm:text-lg">${copy.coach}</p>
+                <div class="relative z-10 mt-5 flex items-center justify-center">
+                  <div class="result-badge rounded-2xl border px-5 py-3 ${tierConfig.badgeClass}">
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em]">${copy.label}</p>
+                    <p class="mt-1 text-3xl font-black sm:text-4xl">${metrics.percent}%</p>
+                  </div>
+                </div>
+                <p class="relative z-10 mt-4 text-lg text-slate-100">
+                  Du fick <span class="font-black ${tierConfig.scoreClass}">${metrics.score}</span> av <span class="font-black ${tierConfig.scoreClass}">${metrics.maxScore}</span> poäng.
+                </p>
+                <p class="relative z-10 mt-1 text-sm text-slate-300">Mål för toppnivå: minst ${RESULT_THRESHOLDS.high}%.</p>
                 <button
                   type="button"
                   data-action="play-again"
-                  class="mt-8 rounded-xl border border-blue-300/30 bg-blue-600 px-6 py-3 text-lg font-bold text-white transition hover:bg-blue-500"
+                  class="relative z-10 mt-8 rounded-xl border border-blue-300/30 bg-blue-600 px-6 py-3 text-lg font-bold text-white transition hover:bg-blue-500"
                 >
                   Spela igen
                 </button>
