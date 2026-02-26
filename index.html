@@ -1958,7 +1958,14 @@
             : `
               <div class="flex items-center justify-between gap-2">
                 <p class="text-sm font-semibold uppercase tracking-[0.15em] text-cyan-200">Topplista</p>
-                <button data-action="leaderboard-refresh" data-mode="${activeMode}" class="rounded-lg border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100 hover:bg-cyan-500/25">Uppdatera</button>
+                <div class="flex items-center gap-2">
+                  <button data-action="leaderboard-refresh" data-mode="${activeMode}" class="rounded-lg border border-cyan-300/40 bg-cyan-500/15 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100 hover:bg-cyan-500/25">Uppdatera</button>
+                  ${
+                    state.admin.authenticated
+                      ? `<button data-action="admin-logout" class="rounded-lg border border-red-300/45 bg-red-500/20 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-100 hover:bg-red-500/30">Lås admin</button>`
+                      : `<button data-action="admin-login" class="rounded-lg border border-slate-400/60 bg-slate-800/70 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-100 hover:bg-slate-700/80">Admin</button>`
+                  }
+                </div>
               </div>
               <div class="mt-2 flex gap-2">
                 <button data-action="leaderboard-tab" data-mode="skeleton" class="leaderboard-tab ${activeMode === "skeleton" ? "is-active" : ""} rounded-lg border border-slate-500/60 bg-slate-900/60 px-3 py-1 text-xs font-semibold text-slate-200">Skelett</button>
